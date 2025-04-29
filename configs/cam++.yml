@@ -1,0 +1,34 @@
+use_model: 'CAMPPlus'
+
+# 数据集和音频配置（用于实时推理）
+dataset_conf:
+  # 全局音频采样率
+  sample_rate: 16000
+  # 是否进行音量归一化
+  use_dB_normalization: True
+  # 目标归一化音量（单位 dB）
+  target_dB: -20
+  # 最短和最长音频时长（单位秒）
+  min_duration: 0.4
+  max_duration: 3
+  # 标签列表路径（用于自动获取类别数，如 num_class 为 null）
+  label_list_path: "E:/finalproject/CARLA_0.9.14/WindowsNoEditor/Project/AudioClassification-Pytorch/dataset_myproject/label_list.txt"
+
+# 数据预处理参数（特征提取设置）
+preprocess_conf:
+  # 是否使用 HuggingFace 上的预训练模型提取音频特征
+  use_hf_model: False
+  # 特征提取方法：支持 Fbank、MFCC、Spectrogram 等
+  feature_method: 'Fbank'
+  method_args:
+    sample_frequency: 16000
+    num_mel_bins: 80
+
+# 模型配置（用于推理阶段）
+model_conf:
+  # 模型参数：分类数为 null 时会自动从标签列表中获取
+  num_class: null
+
+# 推理相关配置（可根据需要扩展配置项，目前仅示例是否使用 GPU）
+infer_conf:
+  use_gpu: True

@@ -1,0 +1,16 @@
+{
+  "scene": "Normal low speed driving",
+  "need_types": [
+    "2I"
+  ],
+  "speed_min": 30,
+  "safety_min": 80,
+  "selected_methods": [
+    {
+      "name": "LTS certificate authentication",
+      "typ": "2I",
+      "safe": 85,
+      "spd": 60
+    }
+  ]
+}
