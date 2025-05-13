@@ -145,7 +145,7 @@ class World(object):
         blueprint = self.world.get_blueprint_library().find('vehicle.tesla.model3')
         blueprint.set_attribute('role_name', self.actor_role_name)
         if blueprint.has_attribute('color'):
-            blueprint.set_attribute('color', random.choice(blueprint.get_attribute('color').recommended_values))
+            blueprint.set_attribute('color', '0,0,255')
         if blueprint.has_attribute('driver_id'):
             blueprint.set_attribute('driver_id', random.choice(blueprint.get_attribute('driver_id').recommended_values))
         if blueprint.has_attribute('is_invincible'):
@@ -416,32 +416,74 @@ class HUD(object):
         color_steer = (255, 255, 0) if abs(steer_val) > 0.5 else (100, 100, 100)
         pygame.draw.circle(display, color_brake, (x_center - spacing, y_top + indicator_radius), indicator_radius)
         pygame.draw.circle(display, color_steer, (x_center + spacing, y_top + indicator_radius), indicator_radius)
+        self._notifications.render(display)
 
-            # —— 新增：右侧面板 —— 
+        # —— 右侧 HUD 面板 —— 
         panel_width = 220
         panel_x = self.dim[0] - panel_width
-        # 可选：给右面板加个半透明背景
         panel_bg = pygame.Surface((panel_width, self.dim[1]))
         panel_bg.set_alpha(100)
         display.blit(panel_bg, (panel_x, 0))
 
-        # 把实时数据渲染成 surface
-        throttle, brake, speed, angle = controller.get_vehicle_data()
-        s_throttle = self._font_mono.render(f"Throttle: {throttle:.2f}", True, (255,255,255))
-        s_brake    = self._font_mono.render(f"Brake:    {brake:.2f}",    True, (255,255,255))
-        s_speed    = self._font_mono.render(f"Speed:    {speed:.1f} km/h", True, (255,255,255))
-        s_angle    = self._font_mono.render(f"Steering: {angle:.1f}°",    True, (255,255,255))
-
-        # 定义行高和起始 Y
         y0 = 150
         line_h = 30
+        y_line = 0  # 逐行绘制位置
 
-        # blit 到右侧
-        display.blit(s_throttle, (panel_x + 10, y0 + 0*line_h))
-        display.blit(s_brake,    (panel_x + 10, y0 + 1*line_h))
-        display.blit(s_speed,    (panel_x + 10, y0 + 2*line_h))
-        display.blit(s_angle,    (panel_x + 10, y0 + 3*line_h))
+        # ==== 显示声音分类（DL） ====
+        try:
+            with open("DL.json", "r", encoding="utf-8") as f:
+                dl_data = json.load(f)
+                sound_class = dl_data.get("sound_class", 0)
+                sound_text = {
+                    0: "nothing",
+                    1: "crash",
+                    2: "siren",
+                    3: "car_horn",
+                    4: "children_playing"
+                }.get(sound_class, "unknown")
+                s_sound = self._font_mono.render(f"Sound: {sound_text}", True, (255, 255, 255))
+                display.blit(s_sound, (panel_x + 10, y0 + y_line * line_h))
+                y_line += 1
+        except Exception as e:
+            print(f"[HUD] DL.json 读取失败: {e}")
 
+        # ==== 显示场景分析结果（VLM） ====
+        try:
+            with open("VLM.json", "r", encoding="utf-8") as f:
+                vlm_data = json.load(f)
+                scene_class = vlm_data.get("scene_class", 0)
+                special_case = vlm_data.get("special_case", 0)
+                low_vis = vlm_data.get("low_visibility", 0)
+
+                scene_map = {
+                    1: "Wide city road",
+                    2: "Narrow road",
+                    3: "Intersection",
+                    4: "Highway",
+                    5: "Mountain road"
+                }
+                special_map = {
+                    0: "None",
+                    1: "Pedestrian block",
+                    2: "Accident",
+                    3: "Heavy traffic",
+                    4: "Obstacle"
+                }
+
+                s_scene = self._font_mono.render(f"Scene: {scene_map.get(scene_class, 'unknown')}", True, (255, 255, 255))
+                s_special = self._font_mono.render(f"Special: {special_map.get(special_case, 'unknown')}", True, (255, 255, 255))
+                s_vis = self._font_mono.render(f"LowVis: {'Yes' if low_vis else 'No'}", True, (255, 255, 255))
+
+                display.blit(s_scene, (panel_x + 10, y0 + y_line * line_h))
+                y_line += 1
+                display.blit(s_special, (panel_x + 10, y0 + y_line * line_h))
+                y_line += 1
+                display.blit(s_vis, (panel_x + 10, y0 + y_line * line_h))
+                y_line += 1
+        except Exception as e:
+            print(f"[HUD] VLM.json 读取失败: {e}")
+
+        # —— 左侧 HUD 面板 —— 
 
         # 1) 获取当前控制量
         throttle, brake, speed, angle = controller.get_vehicle_data()
@@ -481,7 +523,7 @@ class HUD(object):
         if not self._show_info:
             return
 
-        # 获取玩家当前控制信息，并保存到 self.last_control
+        # 获取当前控制信息，并保存到 self.last_control
         self.last_control = world.player.get_control()
 
         t = world.player.get_transform()
@@ -569,32 +611,6 @@ class HUD(object):
         self._notifications.set_text('Error: %s' % text, (255, 0, 0))
 
     
-
-# ============================================================================== 
-# -- FadingText ----------------------------------------------------------------
-# ==============================================================================
-class FadingText(object):
-    def __init__(self, font, dim, pos):
-        self.font = font
-        self.dim = dim
-        self.pos = pos
-        self.seconds_left = 0
-        self.surface = pygame.Surface(self.dim)
-
-    def set_text(self, text, color=(255, 255, 255), seconds=2.0):
-        text_texture = self.font.render(text, True, color)
-        self.surface = pygame.Surface(self.dim)
-        self.seconds_left = seconds
-        self.surface.fill((0, 0, 0, 0))
-        self.surface.blit(text_texture, (10, 11))
-
-    def tick(self, _, clock):
-        delta_seconds = 1e-3 * clock.get_time()
-        self.seconds_left = max(0.0, self.seconds_left - delta_seconds)
-        self.surface.set_alpha(500.0 * self.seconds_left)
-
-    def render(self, display):
-        display.blit(self.surface, self.pos)
 
 # ============================================================================== 
 # -- FadingText ----------------------------------------------------------------
@@ -967,7 +983,7 @@ def game_loop(args):
         client = carla.Client(args.host, args.port)
         client.set_timeout(30.0)
         # 以下负责切换场景
-        #Town01	小城市街区
+            #Town01	小城市街区
            # Town02	城市中心区域
            # Town03	环形郊区道路
            # Town04	高速公路和收费站
@@ -976,7 +992,7 @@ def game_loop(args):
            #Town07	小型郊区住宅区
            # Town10HD	高精度城市地图
            # Town11	山路场景
-        client.load_world('Town11')
+        client.load_world('Town10HD')
         sim_world = client.get_world()
 
         display = pygame.display.set_mode((args.width,args.height), pygame.HWSURFACE|pygame.DOUBLEBUF)
