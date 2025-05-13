@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Z3 Solver Visualization Interface</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+</head>
+<body>
+    <div class="container-fluid">
+        <header class="py-3 mb-3 border-bottom">
+            <div class="container d-flex align-items-center">
+                <h1 class="fs-4">Z3 Solver Real-time Monitoring System</h1>
+                <span class="ms-auto badge bg-success" id="status-badge">Running</span>
+            </div>
+        </header>
+
+        <div class="row">
+            <!-- Input Data Panel -->
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title mb-0">Input Data</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <!-- VLM Data -->
+                            <div class="col-md-4">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-info text-white">VLM.json</div>
+                                    <div class="card-body">
+                                        <div id="vlm-data" class="json-display"></div>
+                                    </div>
+                                    <div class="card-footer text-muted small" id="vlm-time">Not Updated</div>
+                                </div>
+                            </div>
+                            
+                            <!-- DL Data -->
+                            <div class="col-md-4">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-warning text-dark">DL.json</div>
+                                    <div class="card-body">
+                                        <div id="dl-data" class="json-display"></div>
+                                    </div>
+                                    <div class="card-footer text-muted small" id="dl-time">Not Updated</div>
+                                </div>
+                            </div>
+                            
+                            <!-- BUSDATA Data -->
+                            <div class="col-md-4">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-success text-white">BUSDATA.json</div>
+                                    <div class="card-body">
+                                        <div id="bus-data" class="json-display"></div>
+                                    </div>
+                                    <div class="card-footer text-muted small" id="bus-time">Not Updated</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Output Results Panel -->
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="card-title mb-0">Solving Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="result-container">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header bg-dark text-white">Scene Recognition</div>
+                                        <div class="card-body">
+                                            <h3 id="scene-name" class="text-center">-</h3>
+                                            <div class="progress mt-2">
+                                                <div id="confidence-bar" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                                            </div>
+                                            <p class="text-center mt-1">Confidence: <span id="confidence-value">0%</span></p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header bg-dark text-white">Threshold Requirements</div>
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span>Safety Threshold:</span>
+                                                <span id="safety-min" class="badge bg-primary">-</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between mb-2">
+                                                <span>Speed Threshold:</span>
+                                                <span id="speed-min" class="badge bg-success">-</span>
+                                            </div>
+                                            <div class="d-flex justify-content-between">
+                                                <span>Required Types:</span>
+                                                <div id="need-types"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header bg-dark text-white">Selected Verification Methods</div>
+                                <div class="card-body">
+                                    <ul id="methods-list" class="list-group"></ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-muted small" id="result-time">Not Updated</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- History Chart -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card mb-4">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="card-title mb-0">History</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="history-chart" height="100"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
