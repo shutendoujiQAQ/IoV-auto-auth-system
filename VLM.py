@@ -16,7 +16,7 @@ def warm_start_model():
     global model_warm_started
     with model_lock:
         if not model_warm_started:
-            print("正在预热模型...")
+            print("Activating...")
             client.generate(
                 model='gemma3:27b',
                 prompt="ping",
@@ -29,7 +29,7 @@ def warm_start_model():
                 }
             )
             model_warm_started = True
-            print("模型预热完成")
+            print("Complete ")
 
 def encode_image_base64(path):
     """编码图片为base64"""
@@ -80,7 +80,7 @@ def process_image_analysis(image_path):
                 return data
 
     except Exception as e:
-        print(f"处理过程中出错: {e}")
+        print(f"Error in processing : {e}")
 
     # 默认值
     return {"scene_class": 0, "special_case": 0, "low_visibility": 0}
@@ -94,15 +94,19 @@ def continuous_analysis(image_path, interval=5):
         with open('VLM.json', 'w') as f:
             json.dump(result, f, indent=2)
         ts = time.strftime('%Y-%m-%d %H:%M:%S')
-        print(f"[{ts}] 分析结果:")
+        print(f"[{ts}] Analysis result:")
         print(json.dumps(result, indent=2))
         print("-" * 40)
         elapsed = time.time() - start_time
         time.sleep(max(0, interval - elapsed))
 
 if __name__ == "__main__":
-    image_path = r'E:\finalproject\CARLA_0.9.14\WindowsNoEditor\Project\judge\photo.png'  # 替换为你的图片路径
+    image_path = 'Photo/photo.png'  # 相对路径，使用正斜杠
     try:
         continuous_analysis(image_path)
     except KeyboardInterrupt:
         print("\n分析循环已停止")
+    try:
+        continuous_analysis(image_path)
+    except KeyboardInterrupt:
+        print("\nResult Analysis loop stopped")

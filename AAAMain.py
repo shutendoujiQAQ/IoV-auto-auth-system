@@ -248,7 +248,7 @@ class XboxController(object):
     def __init__(self, world):
         pygame.joystick.init()
         if pygame.joystick.get_count() < 1:
-            raise RuntimeError("未检测到 Xbox 手柄")
+            raise RuntimeError("Xbox Controller not found")
         self._joystick = pygame.joystick.Joystick(0)
         self._joystick.init()
         self.world = world
@@ -257,7 +257,7 @@ class XboxController(object):
             self._reverse = False
             self._overtake_light = False
         else:
-            raise NotImplementedError("仅支持车辆控制")
+            raise NotImplementedError("Only support vehicles control")
         # 定时更新 BUSDATA.json
         self.update_busdata_timer = threading.Timer(0.5, self.update_busdata)
         self.update_busdata_timer.daemon = True
@@ -294,7 +294,7 @@ class XboxController(object):
                 with open("BUSDATA.json", "w", encoding="utf-8") as f:
                     json.dump(busdata, f, indent=4, ensure_ascii=False)
             except Exception as e:
-                print("更新 BUSDATA.json 时出错:", e)
+                print("Error when updating BUSDATA.json :", e)
         # 重启定时器
         self.update_busdata_timer = threading.Timer(0.5, self.update_busdata)
         self.update_busdata_timer.daemon = True
@@ -873,7 +873,7 @@ class CameraManager(object):
         sensor_height = 2.4  # 固定拍照摄像头安装高度
         self.last_photo_time = 0
         self.photo_save_interval = 2  # 每 2 秒拍一张
-        self.photo_save_path = "judge"  # 拍照图片保存目录
+        self.photo_save_path = "Photo"  # 拍照图片保存目录
         self.photo_force_save = False   # 用于立即触发拍照的标志
         self.emergency_state = False    # 紧急状态，布尔类型
         self.photo_transform = carla.Transform(carla.Location(z=sensor_height), carla.Rotation(yaw=0))

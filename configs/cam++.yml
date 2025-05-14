@@ -12,7 +12,7 @@ dataset_conf:
   min_duration: 0.4
   max_duration: 3
   # 标签列表路径（用于自动获取类别数，如 num_class 为 null）
-  label_list_path: "E:/finalproject/CARLA_0.9.14/WindowsNoEditor/Project/AudioClassification-Pytorch/dataset_myproject/label_list.txt"
+  label_list_path: "dataset_myproject/label_list.txt"
 
 # 数据预处理参数（特征提取设置）
 preprocess_conf:

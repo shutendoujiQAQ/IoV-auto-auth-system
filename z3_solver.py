@@ -10,7 +10,7 @@ from pprint import pprint
 # ------------------------------------------------------------------
 # Utility: Read three JSON files (field names fixed)
 # ------------------------------------------------------------------
-def load_inputs(vlm_path='VLM.json', dl_path='DL.json', bus_path='BUSDATA_PROCESSED.json'):
+def load_inputs(vlm_path='VLM.json', dl_path='DL.json', bus_path='BUSDATA.json'):
     with open(vlm_path, 'r', encoding='utf-8') as f:
         vlm = json.load(f)
     with open(dl_path, 'r', encoding='utf-8') as f:
@@ -348,8 +348,9 @@ def choose_methods(req):
         opt.add(AtLeast(*[x[i] for i, m in enumerate(METHODS) if m['typ'] == typ], 1))
     # Safety/speed thresholds
     for i, m in enumerate(METHODS):
-        opt.add(Implies(x[i], m['safe'] >= req['safe']))
-        opt.add(Implies(x[i], m['spd']  >= req['spd']))
+        # 聚合指标而非逐方法硬约束
+        opt.add(Sum([If(xi, METHODS[i]['safe'], 0) for i, xi in enumerate(x)]) >= req['safe'])
+        opt.add(Sum([If(xi, METHODS[i]['spd'],  0) for i, xi in enumerate(x)]) >= req['spd'])
     # Goal: Minimum number of methods, maximum speed sum
     opt.minimize(Sum([If(xi, 1, 0) for xi in x]))
     opt.maximize(Sum([If(xi, METHODS[i]['spd'], 0) for i, xi in enumerate(x)]))

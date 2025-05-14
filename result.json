@@ -1,16 +1,23 @@
 {
-  "scene": "Normal low speed driving",
+  "scene": "Normal low-speed driving",
+  "confidence": 1.0,
   "need_types": [
     "2I"
   ],
-  "speed_min": 30,
-  "safety_min": 80,
+  "speed_min": 44,
+  "safety_min": 25,
   "selected_methods": [
     {
-      "name": "LTS certificate authentication",
+      "name": "Fingerprint authentication",
+      "typ": "2P",
+      "safe": 23.75,
+      "spd": 47
+    },
+    {
+      "name": "Signal‑strength device verification",
       "typ": "2I",
-      "safe": 85,
-      "spd": 60
+      "safe": 9.75,
+      "spd": 42.5
     }
   ]
 }
