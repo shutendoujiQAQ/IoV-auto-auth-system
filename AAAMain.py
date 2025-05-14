@@ -312,6 +312,8 @@ class XboxController(object):
         angle = steer_axis * 60
         return throttle, brake, speed, angle
 
+    def get_overtake_light(self):
+        return self._overtake_light  # 返回超车灯的当前状态
     def parse_events(self, world, clock):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -511,6 +513,12 @@ class HUD(object):
             text_surf = self._font_mono.render(line, True, (255,255,255))
             display.blit(text_surf, (x, y))
             y += 20
+        # 5) 渲染超车灯状态
+        overtake_light_status = "True" if controller.get_overtake_light() else "False"
+        overtake_text = f"Overtake Light: {overtake_light_status}"
+        text_surf = self._font_mono.render(overtake_text, True, (255, 255, 255))
+        display.blit(text_surf, (x, y))  # 显示超车灯状态
+        y += 20
 
     def on_world_tick(self, timestamp):
         self._server_clock.tick()

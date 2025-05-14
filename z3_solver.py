@@ -77,32 +77,50 @@ def fuzzy_and_multiple(*args):
 # ------------------------------------------------------------------
 # 1. Scene rules
 # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+# 1‑A. 新增：转向‑变道场景（速度>0，角度>20°，并且方向灯亮）
+# ------------------------------------------------------------------
+def scene_turning(vlm, dl, bus):
+    # --- 硬条件 ---
+    if bus.get('overtake_light', False) is not True:
+        return 0.0
+
+    # --- 模糊条件 ---
+    speed_conf = fuzzy_greater(bus['speed'], 0, 2)          # 速度略大于 0
+    angle_conf = fuzzy_greater(abs_(bus['angle']), 10, 5)   # 角度大于 20°（5° 过渡带）
+
+    # 取两者的最小值作为置信度
+    return fuzzy_and(speed_conf, angle_conf)
+
 def scene_good_overtake(vlm, dl, bus):
     # VLM和DL参数使用硬条件
-    hard_cond = (vlm['scene_class'] in {1, 4} and vlm['special_case'] == 0)
+    hard_cond = (vlm['scene_class'] in {1, 4} and vlm['special_case'] == 0)and bus.get('overtake_light', False) is True
     if not hard_cond:
         return 0.0  # 如果硬条件不满足，直接返回0置信度
     
     # BUSDATA参数使用模糊逻辑
+    # ②模糊条件
     throttle_conf = fuzzy_greater(bus['throttle'], 0.3, 0.1)
-    brake_conf = fuzzy_equal(bus['brake'], 0, 0.05)
-    speed_conf = fuzzy_greater(bus['speed'], 40, 5)
-    angle_conf = fuzzy_greater(abs_(bus['angle']), 0, 2)
+    brake_conf    = fuzzy_equal  (bus['brake'],    0,   0.05)
+    speed_conf    = fuzzy_greater(bus['speed'],    30,  5)
+    # ‼ 角度小于 20°
+    angle_conf    = fuzzy_less(abs_(bus['angle']), 10,  2)
     
     # 计算总体置信度
     return fuzzy_and_multiple(throttle_conf, brake_conf, speed_conf, angle_conf)
 
 def scene_bad_overtake(vlm, dl, bus):
     # VLM和DL参数使用硬条件
-    hard_cond = (vlm['scene_class'] in {2, 3, 5} and vlm['special_case'] in {1, 2, 4})
+    hard_cond = (vlm['scene_class'] in {2, 3, 5} and vlm['special_case'] in {1, 2, 4})and bus.get('overtake_light', False) is True
     if not hard_cond:
         return 0.0  # 如果硬条件不满足，直接返回0置信度
     
     # BUSDATA参数使用模糊逻辑
+    # ②模糊条件（同样改为角度 < 20°）
     throttle_conf = fuzzy_greater(bus['throttle'], 0.3, 0.1)
-    brake_conf = fuzzy_equal(bus['brake'], 0, 0.05)
-    speed_conf = fuzzy_greater(bus['speed'], 40, 5)
-    angle_conf = fuzzy_greater(abs_(bus['angle']), 0, 2)
+    brake_conf    = fuzzy_equal  (bus['brake'],    0,   0.05)
+    speed_conf    = fuzzy_greater(bus['speed'],    30,  5)
+    angle_conf    = fuzzy_less(abs_(bus['angle']), 10,  2)
     
     # 计算总体置信度
     return fuzzy_and_multiple(throttle_conf, brake_conf, speed_conf, angle_conf)
@@ -230,6 +248,7 @@ SCENES = [
     dict(name='Obstacles blocking the road ahead in unfavorable conditions', cond=scene_bad_obstacle_block, safe=53, spd=54, need={'2V','2I'}),
     dict(name='Good obstacle blocking ahead',     cond=scene_good_obstacle_block, safe=28, spd=62, need={'2V','2I'}),
     dict(name='Avoid special vehicles',           cond=scene_yield_emergency,   safe=35,  spd=74, need={'2V'}),
+    dict(name='Turning with indicator on', cond=scene_turning,safe=40,spd=55, need={'2V'}  ),
     dict(name='Overtaking on non good road conditions',         cond=scene_bad_overtake,      safe=33,  spd=46, need={'2V'}),
     dict(name='Overtaking on good road conditions',           cond=scene_good_overtake,     safe=23,  spd=62, need={'2V'}),
     dict(name='Turn/U-turn at the intersection',         cond=scene_junction_turn,     safe=47,  spd=54, need={'2V','2I'}),
