@@ -56,7 +56,6 @@ With the rapid growth of IoV, secure and efficient identity authentication has b
   ```bash
   srart.bat
   ```
-- Real-time outputs will be saved to `results/` as JSON files.
 
 ## 🧪 Testing & Evaluation
 
