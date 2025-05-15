@@ -1,20 +1,21 @@
 @echo off
 REM 1. Run Carla
 echo Launching the Carla program...
-start "" "C:\path\to\your\program.exe"
+start "" ".\AAAMain.py"
 
 REM Optional delay to ensure the EXE starts first
 timeout /t 10 /nobreak >nul
 
 REM 2. Run multiple Python scripts in new terminal windows
-echo Launching Python script 1...
-start cmd /k python "C:\path\to\your\script1.py"
 
-echo Launching Python script 2...
-start cmd /k python "C:\path\to\your\script2.py"
+echo Launching z3_solver...
+start cmd /k python ".\z3_solver.py"
 
-echo Launching Python script 3...
-start cmd /k python "C:\path\to\your\script3.py"
+echo Launching app.py...
+start cmd /k python ".\app.py"
+
+echo Launching VLM...
+start cmd /k python ".\VLM.py"
 
 REM 3. Open the Z3 monitor website
 echo Opening the website...
