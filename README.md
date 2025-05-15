@@ -23,18 +23,7 @@ With the rapid growth of IoV, secure and efficient identity authentication has b
 
 ## 🏗️ Project Structure
 
-```
-├── visual_module/           # Visual scene recognition (VLM integration)
-├── audio_module/            # Audio recognition module (CAMPPlus-Fbank)
-├── bus_data_module/         # Vehicle bus data acquisition
-├── reasoning_module/        # Z3 solver for reasoning & strategy selection
-├── carla_simulation/        # CARLA environment scripts & configuration
-├── strategy_library/        # Authentication strategy definitions & scoring
-├── data/                    # Datasets & sample inputs
-├── results/                 # Output results & logs
-├── README.md                # Project documentation (this file)
-└── requirements.txt         # Python dependencies
-```
+![Structure](https://github.com/shutendoujiQAQ/IoV-auto-auth-system/blob/main/structure.png)
 
 ## 🚀 Getting Started
 
