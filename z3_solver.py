@@ -169,15 +169,15 @@ def scene_traffic_jam(vlm, dl, bus):
 
 def scene_junction_turn(vlm, dl, bus):
     # VLM参数使用硬条件
-    hard_cond = (vlm['scene_class'] == 3)
+    hard_cond = (vlm['scene_class'] == 3)and bus.get('overtake_light', False) is True
     if not hard_cond:
-        return 0.0
-    
+        return 0.0  # 如果硬条件不满足，直接返回0置信度
+
     # BUSDATA参数使用模糊逻辑
     throttle_conf = fuzzy_greater(bus['throttle'], 0.1, 0.05)
     brake_conf = fuzzy_equal(bus['brake'], 0, 0.05)
-    speed_conf = fuzzy_greater(bus['speed'], 15, 3)
-    angle_conf = fuzzy_greater(abs_(bus['angle']), 30, 5)
+    speed_conf = fuzzy_greater(bus['speed'], 0, 2)  
+    angle_conf = fuzzy_greater(abs_(bus['angle']), 10, 5) 
     
     return fuzzy_and_multiple(throttle_conf, brake_conf, speed_conf, angle_conf)
 
@@ -248,10 +248,10 @@ SCENES = [
     dict(name='Obstacles blocking the road ahead in unfavorable conditions', cond=scene_bad_obstacle_block, safe=53, spd=54, need={'2V','2I'}),
     dict(name='Good obstacle blocking ahead',     cond=scene_good_obstacle_block, safe=28, spd=62, need={'2V','2I'}),
     dict(name='Avoid special vehicles',           cond=scene_yield_emergency,   safe=35,  spd=74, need={'2V'}),
+    dict(name='Turn/U-turn at the intersection',         cond=scene_junction_turn,     safe=47,  spd=54, need={'2V','2I'}),
     dict(name='Turning with indicator on', cond=scene_turning,safe=40,spd=55, need={'2V'}  ),
     dict(name='Overtaking on non good road conditions',         cond=scene_bad_overtake,      safe=33,  spd=46, need={'2V'}),
     dict(name='Overtaking on good road conditions',           cond=scene_good_overtake,     safe=23,  spd=62, need={'2V'}),
-    dict(name='Turn/U-turn at the intersection',         cond=scene_junction_turn,     safe=47,  spd=54, need={'2V','2I'}),
     dict(name='Traffic lights at intersections',         cond=scene_traffic_light,     safe=46,  spd=48, need={'2V','2I'}),
     dict(name='Vehicles honking on non good road conditions',   cond=scene_bad_road_horn,     safe=33,  spd=52, need={'2V'}),
     dict(name='Good road conditions with vehicles honking their horns',     cond=scene_good_road_horn,    safe=23,  spd=52, need={'2V'}),
