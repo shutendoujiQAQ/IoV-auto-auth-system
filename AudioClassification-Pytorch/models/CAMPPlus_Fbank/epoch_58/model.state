@@ -1,0 +1,7 @@
+{
+    "last_epoch": 58,
+    "accuracy": 0.9266381766381767,
+    "version": "1.0.6",
+    "model": "CAMPPlus",
+    "feature_method": "Fbank"
+}
