@@ -34,9 +34,9 @@ With the rapid growth of IoV, secure and efficient identity authentication has b
   ```bash
   pip install -r requirements.txt
   ```
-  carla=0.9.14，download in GitHub：https://github.com/carla-simulator/carla/releases
-  macls=0.4.7 install by: python -m pip install macls -U -i https://pypi.tuna.tsinghua.edu.cn/simple
-- CARLA Simulator v0.9.13 (local or remote GPU server recommended).
+- CARLA Simulator v0.9.14，download in GitHub：https://github.com/carla-simulator/carla/releases
+- macls=0.4.7 install by: python -m pip install macls -U -i https://pypi.tuna.tsinghua.edu.cn/simple
+- Our Conda environment backup file is in IoV-auto-auth-system\Environment\FinalEnvironment.yaml
 
 ### 2. Data Preparation
 
@@ -44,7 +44,10 @@ With the rapid growth of IoV, secure and efficient identity authentication has b
 - Place datasets in `data/` directory.
 
 ### 3. Running the System
-
+- Activate conda virtual environment (Final is our virtual environment)
+  ```bash
+  conda activate Final
+  ```
 - Launch CARLA simulation:
   ```bash
   ./CarlaUE4.sh
