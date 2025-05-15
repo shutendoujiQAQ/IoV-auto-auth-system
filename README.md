@@ -35,7 +35,10 @@ With the rapid growth of IoV, secure and efficient identity authentication has b
   pip install -r requirements.txt
   ```
 - CARLA Simulator v0.9.14，download in GitHub：https://github.com/carla-simulator/carla/releases
-- macls=0.4.7 install by: python -m pip install macls -U -i https://pypi.tuna.tsinghua.edu.cn/simple
+- macls v0.4.7 
+  ```bash
+  python -m pip install macls -U -i https://pypi.tuna.tsinghua.edu.cn/simple
+  ```
 - Our Conda environment backup file is in IoV-auto-auth-system\Environment\FinalEnvironment.yaml
 
 ### 2. Data Preparation
