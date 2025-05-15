@@ -1,5 +1,5 @@
 This document include package which may cannot install by pip.
 
-carla=0.9.14(download in GitHub)
+carla=0.9.14(download in GitHub：https://github.com/carla-simulator/carla/releases)
 macls==0.4.7 (install by: python -m pip install macls -U -i https://pypi.tuna.tsinghua.edu.cn/simple
 )
