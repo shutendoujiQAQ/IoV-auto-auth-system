@@ -40,11 +40,6 @@ With the rapid growth of IoV, secure and efficient identity authentication has b
 
 - Download UrbanSound8K and emergency vehicle alarm datasets for audio module.
 - Place datasets in `data/` directory.
-- Run preprocessing scripts:
-  ```bash
-  python audio_module/preprocess.py
-  python visual_module/setup_prompts.py
-  ```
 
 ### 3. Running the System
 
