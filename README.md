@@ -29,7 +29,7 @@ With the rapid growth of IoV, secure and efficient identity authentication has b
 
 ### 1. Environment Setup
 
-- Python 3.9
+- Python 3.7
 - Install dependencies:
   ```bash
   pip install -r requirements.txt
