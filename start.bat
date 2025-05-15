@@ -1,25 +1,28 @@
 @echo off
-REM 1. Run Carla
-echo Launching the Carla program...
-start "" ".\AAAMain.py"
+REM === 启动脚本：激活 Conda 环境并运行 Python 项目 ===
 
-REM Optional delay to ensure the EXE starts first
-timeout /t 10 /nobreak >nul
+REM 设置环境名称
+set ENV_NAME=Final
 
-REM 2. Run multiple Python scripts in new terminal windows
+REM 检查 Anaconda 是否安装
+where conda >nul 2>nul
+if errorlevel 1 (
+    echo [ERROR] Please First Install Anaconda or Miniconda。
+    pause
+    exit /b
+)
 
-echo Launching z3_solver...
-start cmd /k python ".\z3_solver.py"
+REM 初始化 Conda（重要：激活环境前必须初始化）
+call "%USERPROFILE%\anaconda3\Scripts\activate.bat"
 
-echo Launching app.py...
-start cmd /k python ".\app.py"
+REM 激活环境
+call conda activate %ENV_NAME%
 
-echo Launching VLM...
-start cmd /k python ".\VLM.py"
+REM 运行主程序（替换为你要启动的脚本）
+python app.py
 
-REM 3. Open the Z3 monitor website
-echo Opening the website...
-start "" "https://localhost:9000"
+REM 如果想运行其他脚本也可以在这里追加
+REM python run_flask.py
+REM python detect_sound.py
 
-echo All tasks have been launched.
 pause
