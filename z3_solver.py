@@ -80,58 +80,81 @@ def fuzzy_and_multiple(*args):
 # ------------------------------------------------------------------
 # 1‑A. 新增：转向‑变道场景（速度>0，角度>20°，并且方向灯亮）
 # ------------------------------------------------------------------
+def fuzzy_between(x, low, high, margin):
+    return min(fuzzy_greater(x, low, margin), fuzzy_less(x, high, margin))
+
 def scene_turning(vlm, dl, bus):
-    # --- 硬条件 ---
-    if bus.get('overtake_light', False) is not True:
+    angle     = abs_(bus.get('angle', 0))
+    speed     = bus.get('speed', 0)
+    throttle  = bus.get('throttle', 0)
+    light_on  = bus.get('overtake_light', False)
+    if not light_on:
+        return 0.0  # 灯没开，不判断
+
+    # -------- 转弯识别 --------
+    angle_conf = fuzzy_greater(angle, 8, 3)          # 明显转角
+    speed_conf = fuzzy_between(speed, 3, 50, 5)       # 中速
+    throttle_conf = fuzzy_less(throttle, 0.7, 0.2)    # 油门不能太大
+    turn_conf = fuzzy_and_multiple(angle_conf, speed_conf, throttle_conf)
+
+    # -------- 抑制误判为超车 --------
+    if angle < 8 and throttle > 0.6 and speed > 25:
+        return 0.0  # 高速轻转角，基本是超车行为
+
+    return turn_conf
+
+
+
+def scene_junction_turn(vlm, dl, bus):
+    hard_cond = (vlm['scene_class'] == 3) and bus.get('overtake_light', False)
+    if not hard_cond:
         return 0.0
 
-    # --- 模糊条件 ---
-    speed_conf = fuzzy_greater(bus['speed'], 0, 2)          # 速度略大于 0
-    angle_conf = fuzzy_greater(abs_(bus['angle']), 10, 5)   # 角度大于 20°（5° 过渡带）
+    throttle_conf = fuzzy_greater(bus['throttle'], 0.65, 0.2)
+    brake_conf    = fuzzy_equal(bus['brake'], 0, 0.05)
+    speed_conf    = fuzzy_greater(bus['speed'], 5, 2)
+    angle_conf    = fuzzy_greater(abs_(bus['angle']), 8, 3)
+    base_conf     = fuzzy_and_multiple(throttle_conf, brake_conf, speed_conf, angle_conf)
 
-    # 取两者的最小值作为置信度
-    return fuzzy_and(speed_conf, angle_conf)
+    return min(base_conf + 0.15, 1.0)
 
 def scene_good_overtake(vlm, dl, bus):
-    # VLM和DL参数使用硬条件
-    hard_cond = (vlm['scene_class'] in {1, 4} and vlm['special_case'] == 0)and bus.get('overtake_light', False) is True
+    hard_cond = (vlm['scene_class'] in {1, 4} and vlm['special_case'] == 0) and bus.get('overtake_light', False)
     if not hard_cond:
-        return 0.0  # 如果硬条件不满足，直接返回0置信度
-    
-    # BUSDATA参数使用模糊逻辑
-    # ②模糊条件
-    throttle_conf = fuzzy_greater(bus['throttle'], 0.3, 0.1)
-    brake_conf    = fuzzy_equal  (bus['brake'],    0,   0.05)
-    speed_conf    = fuzzy_greater(bus['speed'],    30,  5)
-    # ‼ 角度小于 20°
-    angle_conf    = fuzzy_less(abs_(bus['angle']), 10,  2)
-    
-    # 计算总体置信度
-    return fuzzy_and_multiple(throttle_conf, brake_conf, speed_conf, angle_conf)
+        return 0.0
+
+    throttle_conf = fuzzy_greater(bus['throttle'], 0.5, 0.2)            # 油门大
+    brake_conf    = fuzzy_equal(bus['brake'], 0, 0.05)                  # 不踩刹车
+    speed_conf    = fuzzy_greater(bus['speed'], 35, 5)                 # 高速
+    angle_conf    = fuzzy_less(abs_(bus['angle']), 6, 2)               # 角度小（接近直线）
+    acc_conf      = fuzzy_greater(bus['acceleration'], 2.0, 0.5)       # 有前向加速度
+
+    return fuzzy_and_multiple(throttle_conf, brake_conf, speed_conf, angle_conf, acc_conf)
+
 
 def scene_bad_overtake(vlm, dl, bus):
-    # VLM和DL参数使用硬条件
-    hard_cond = (vlm['scene_class'] in {2, 3, 5} and vlm['special_case'] in {1, 2, 4})and bus.get('overtake_light', False) is True
+    hard_cond = (vlm['scene_class'] in {2, 3, 5} and vlm['special_case'] in {1, 2, 4}) and bus.get('overtake_light', False)
     if not hard_cond:
-        return 0.0  # 如果硬条件不满足，直接返回0置信度
-    
-    # BUSDATA参数使用模糊逻辑
-    # ②模糊条件（同样改为角度 < 20°）
-    throttle_conf = fuzzy_greater(bus['throttle'], 0.3, 0.1)
-    brake_conf    = fuzzy_equal  (bus['brake'],    0,   0.05)
-    speed_conf    = fuzzy_greater(bus['speed'],    30,  5)
-    angle_conf    = fuzzy_less(abs_(bus['angle']), 10,  2)
-    
-    # 计算总体置信度
-    return fuzzy_and_multiple(throttle_conf, brake_conf, speed_conf, angle_conf)
+        return 0.0
+
+    throttle_conf = fuzzy_greater(bus['throttle'], 0.5, 0.2)
+    brake_conf    = fuzzy_equal(bus['brake'], 0, 0.05)
+    speed_conf    = fuzzy_greater(bus['speed'], 30, 5)
+    angle_conf    = fuzzy_less(abs_(bus['angle']), 8, 2)
+    acc_conf      = fuzzy_greater(bus['acceleration'], 2.0, 0.5)
+
+    return fuzzy_and_multiple(throttle_conf, brake_conf, speed_conf, angle_conf, acc_conf)
+
 
 def scene_yield_emergency(vlm, dl, bus):
     # 紧急车辆声音是确定的分类，使用硬条件
     return 1.0 if dl['sound_class'] == 2 else 0.0
 
 def scene_pedestrian_block(vlm, dl, bus):
-    # 行人阻挡是确定的特殊情况，使用硬条件
-    return 1.0 if vlm['special_case'] == 1 else 0.0
+    hard_match = 1.0 if vlm['special_case'] == 1 else 0.0
+    voice_hint = 1.0 if dl.get('sound_class') == 4 else 0.0  # 有人声
+    return fuzzy_or(hard_match, voice_hint * 0.5)  # 若硬条件不成立，人声可提供最多0.6置信度
+
 
 def scene_good_obstacle_block(vlm, dl, bus):
     # VLM参数使用硬条件
@@ -150,11 +173,20 @@ def scene_self_accident(vlm, dl, bus):
     hard_cond = (dl['sound_class'] == 1)
     if not hard_cond:
         return 0.0
-    
+    if abs_(bus.get('acceleration', 0)) > 7:
+        return 1.0
     # BUSDATA参数使用模糊逻辑
-    speed_conf = fuzzy_equal(bus['speed'], 0, 2)
-    
-    return speed_conf
+    speed_conf = fuzzy_equal(bus['speed'], 6, 4)
+    #加速度，用于判断突发加速度事件（撞车，被撞）
+    acc_conf = fuzzy_greater(abs_(bus.get('acceleration', 0)), 6, 2)
+
+    return fuzzy_and(speed_conf, acc_conf)
+
+def scene_nearby_accident(vlm, dl, bus):
+    if dl['sound_class'] == 1:
+        # 返回较低置信度（确保优先级低于其他场景）
+        return 0.5
+    return 0.0
 
 def scene_traffic_jam(vlm, dl, bus):
     # VLM参数使用硬条件
@@ -167,19 +199,8 @@ def scene_traffic_jam(vlm, dl, bus):
     
     return speed_conf
 
-def scene_junction_turn(vlm, dl, bus):
-    # VLM参数使用硬条件
-    hard_cond = (vlm['scene_class'] == 3)and bus.get('overtake_light', False) is True
-    if not hard_cond:
-        return 0.0  # 如果硬条件不满足，直接返回0置信度
 
-    # BUSDATA参数使用模糊逻辑
-    throttle_conf = fuzzy_greater(bus['throttle'], 0.1, 0.05)
-    brake_conf = fuzzy_equal(bus['brake'], 0, 0.05)
-    speed_conf = fuzzy_greater(bus['speed'], 0, 2)  
-    angle_conf = fuzzy_greater(abs_(bus['angle']), 10, 5) 
-    
-    return fuzzy_and_multiple(throttle_conf, brake_conf, speed_conf, angle_conf)
+
 
 def scene_hard_brake(vlm, dl, bus):
     # BUSDATA参数使用模糊逻辑
@@ -200,7 +221,9 @@ def scene_mountain_hazard(vlm, dl, bus):
     vlm_cond = (vlm['scene_class'] == 5 and vlm['special_case'] in {2, 4})
     dl_cond = (dl['sound_class'] == 1)
     
-    return 1.0 if (vlm_cond or dl_cond) else 0.0
+    return 1.0 if (vlm_cond and dl_cond) else 0.0
+
+
 
 def scene_good_road_horn(vlm, dl, bus):
     # VLM和DL参数使用硬条件
@@ -238,27 +261,6 @@ def scene_normal_low(vlm, dl, bus):
     
     return speed_conf
 
-SCENES = [
-    dict(name='Encountering a car accident on one\'s own', cond=scene_self_accident,     safe=91,  spd=68,  need={'2P','2I'}),
-    dict(name='Emergency brake',             cond=scene_hard_brake,        safe=60,  spd=70, need={'2V'}),
-    dict(name='Emergency avoidance',             cond=scene_hard_evasion,      safe=60,  spd=68, need={'2V'}),
-    dict(name='Mountain road in distress',             cond=scene_mountain_hazard,   safe=60,  spd=54, need={'2V','2P','2I'}),
-    dict(name='Pedestrians blocking ahead',           cond=scene_pedestrian_block,  safe=45,  spd=74, need={'2P'}),
-    dict(name='A car accident occurred ahead',           cond=scene_accident_ahead,    safe=81,  spd=60, need={'2V','2I'}),
-    dict(name='Obstacles blocking the road ahead in unfavorable conditions', cond=scene_bad_obstacle_block, safe=53, spd=54, need={'2V','2I'}),
-    dict(name='Good obstacle blocking ahead',     cond=scene_good_obstacle_block, safe=28, spd=62, need={'2V','2I'}),
-    dict(name='Avoid special vehicles',           cond=scene_yield_emergency,   safe=35,  spd=74, need={'2V'}),
-    dict(name='Turn/U-turn at the intersection',         cond=scene_junction_turn,     safe=47,  spd=54, need={'2V','2I'}),
-    dict(name='Turning with indicator on', cond=scene_turning,safe=40,spd=55, need={'2V'}  ),
-    dict(name='Overtaking on non good road conditions',         cond=scene_bad_overtake,      safe=33,  spd=46, need={'2V'}),
-    dict(name='Overtaking on good road conditions',           cond=scene_good_overtake,     safe=23,  spd=62, need={'2V'}),
-    dict(name='Traffic lights at intersections',         cond=scene_traffic_light,     safe=46,  spd=48, need={'2V','2I'}),
-    dict(name='Vehicles honking on non good road conditions',   cond=scene_bad_road_horn,     safe=33,  spd=52, need={'2V'}),
-    dict(name='Good road conditions with vehicles honking their horns',     cond=scene_good_road_horn,    safe=23,  spd=52, need={'2V'}),
-    dict(name='Traffic jam',                 cond=scene_traffic_jam,       safe=37,  spd=44, need={'2V','2I'}),
-    dict(name='Normal high-speed driving',           cond=scene_normal_high,       safe=37,  spd=50, need={'2I'}),
-    dict(name='Normal low-speed driving',           cond=scene_normal_low,        safe=25,  spd=44, need={'2I'}),
-]
 
 # ------------------------------------------------------------------
 # 2. Special rules (speed +20 / safety −10; low visibility speed +20)
@@ -272,26 +274,165 @@ def rule_low_visibility(vlm, dl, bus, req):
     if vlm.get('low_visibility') == 1:
         req['spd'] += 20
 
-SPECIAL_RULES = [rule_pedestrian_voice, rule_low_visibility]
+SPECIAL_RULES = []# 目前special rules这点被直接放到了spd计算中，所以无需额外设定special rules了。这里暂且做保留
+
+
+# 计算场景需要的速度和安全性分数：
+def compute_spd_from_json(vlm, dl, bus):
+    SCENE_CLASS_SPD_WEIGHT = {
+    1: 0,   # Wide city road
+    2: 5,   # Narrow road
+    3: 10,  # Intersection
+    4: 15,  # Highway
+    5: 20   # Mountain road
+    } 
+    SPECIAL_CASE_SPD_WEIGHT = {
+        0: 0,   # None
+        1: 15,  # Pedestrian block
+        2: 20,  # Accident
+        3: 5,  # Traffic jam
+        4: 10   # Obstacle
+    }
+
+    spd = 0
+    # BUSDATA.json → 车辆动态
+    spd += bus.get("speed", 0) * 0.4
+    spd += abs(bus.get("acceleration", 0)) * 2
+    spd += abs(bus.get("brake", 0)) * 1
+    # VLM.json → 可视场景因素
+    scene_spd = SCENE_CLASS_SPD_WEIGHT.get(vlm.get("scene_class", 0), 0)
+    spd += scene_spd
+    special_spd = SPECIAL_CASE_SPD_WEIGHT.get(vlm.get("special_case", 0), 0)
+    spd += special_spd
+    # 特殊规则
+    if abs(bus.get("brake", 0)) > 0.7:
+        spd += ((abs(bus.get("brake", 0)) - 0.7) * 5) ** 2 * 10  # 可调曲线爆发
+
+
+    if vlm.get("low_visibility", 0):
+        spd += 10
+    # DL.json → 声音事件（如碰撞、尖叫）
+    if dl.get("sound_class", 0) in {1, 4}:
+        spd += 5
+
+    return max(0, min(round(spd, 1), 100))  # 限制在 0~100 范围
+# 计算场景需要的安全分数：
+def compute_safe_from_scene(scene_dict, attack_profile=None):
+    """
+    根据场景中所需的认证类型（need）和对应权重（weight），结合各类型面临的攻击风险，
+    估算当前场景所需的安全性分数（safe），对标 Z3 中的 Security = min(auth, conf, integ) 结构。
+    
+    参数说明：
+    - scene_dict：dict，包含 'need' 和 'weight' 字段，来自 SCENES 中的定义
+    - attack_profile：dict，定义每类认证方式类型面临的攻击风险值（默认固定）
+
+    返回：
+    - safe：float，0~100 的安全性需求得分
+    """
+    
+    # 各认证类型对安全目标的平均贡献能力（模拟 Z3 中的 Impact 值）
+    TYPE_IMPACT = {
+        '2P': {'auth': 0.8, 'conf': 0.7, 'integ': 0.6},  # 如指纹、人脸、证书等，贡献高
+        '2I': {'auth': 0.6, 'conf': 0.6, 'integ': 0.5},  # 如设备、MAC、签名等，较均衡
+        '2V': {'auth': 0.4, 'conf': 0.4, 'integ': 0.5},  # 如车速、位置、视觉等，较弱
+    }
+
+    # 每种认证方式类型可能面临的攻击风险（0~1，越高代表越不安全）
+    ATTACK_RISK = attack_profile or {
+        '2P': 0.1,  # 低风险（如人脸难仿冒）
+        '2I': 0.3,  # 中等风险（如MAC可伪造）
+        '2V': 0.3   # 高风险（如GPS易重放）
+    }
+
+    # 从场景中获取所需认证类型集合与其权重
+    need_set = scene_dict.get('need', set())
+    weight_dict = scene_dict.get('weight', {})
+
+    sum_auth = sum_conf = sum_integ = 0.0
+    total_weight = 0.0
+
+    # 遍历每种认证类型，累加贡献 + 风险调整后的值
+    for typ in need_set:
+        impact = TYPE_IMPACT.get(typ, {'auth': 0.5, 'conf': 0.5, 'integ': 0.5})
+        risk = ATTACK_RISK.get(typ, 0.3)
+        w = weight_dict.get(typ, 1.0)
+
+        # 加入攻击风险惩罚：越容易被攻击，安全性要求越高
+        RISK_EPSILON = 1e-6
+
+        adj_auth  = impact['auth']  / (1 - risk + RISK_EPSILON)
+        adj_conf  = impact['conf']  / (1 - risk + RISK_EPSILON)
+        adj_integ = impact['integ'] / (1 - risk + RISK_EPSILON)
+
+
+        sum_auth += adj_auth * w
+        sum_conf += adj_conf * w
+        sum_integ += adj_integ * w
+        total_weight += w
+
+    if total_weight == 0:
+        return 0.0
+
+    avg_auth = sum_auth / total_weight
+    avg_conf = sum_conf / total_weight
+    avg_integ = sum_integ / total_weight
+
+    # 使用 Z3 中 min(Authenticity, Confidentiality, Integrity) 方式取最终得分
+    final_safe = min(avg_auth, avg_conf, avg_integ)
+    raw_safe = final_safe
+    scaled_safe = 50 + (raw_safe - 0.6) * 150
+    return round(max(50, min(80, scaled_safe)), 1)
+    #return round(final_safe * 100, 1)
+
+
+
+
+#当前主要改动了scene部分，原先设定每个场景的spd和safe现在都根据驾驶数据，周围环境动态计算
+
+SCENES = [
+    dict(name='Encountering a car accident on one\'s own', cond=scene_self_accident, safe=91, need={'2P','2I'}, weight={'2V': 1.0, '2I': 0.6, '2P': 0.5}),
+    dict(name='Nearby accident ', cond=scene_nearby_accident, safe=80, need={'2P','2I'}, weight={'2V': 1.0, '2I': 0.6, '2P': 0.5}),
+    dict(name='Emergency brake', cond=scene_hard_brake, safe=60, need={'2V'}, weight={'2V': 1.0}),
+    dict(name='Emergency avoidance', cond=scene_hard_evasion, safe=60, need={'2V','2I'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Mountain road in distress', cond=scene_mountain_hazard, safe=60, need={'2V','2P','2I'}, weight={'2V': 1.0, '2I': 0.8, '2P': 0.7}),
+    dict(name='Pedestrians blocking ahead', cond=scene_pedestrian_block, safe=45, need={'2P'}, weight={'2P': 1}),
+    dict(name='A car accident occurred ahead', cond=scene_accident_ahead, safe=81, need={'2V','2I'}, weight={'2V': 0.7, '2I': 0.8, '2P': 0.5}),
+    dict(name='Obstacles blocking the road ahead in unfavorable conditions', cond=scene_bad_obstacle_block, safe=53, need={'2V','2I'}, weight={'2V': 1.0, '2I': 0.9}),
+    dict(name='Good obstacle blocking ahead', cond=scene_good_obstacle_block, safe=28, need={'2V','2I'}, weight={'2V': 0.8, '2I':1, '2P': 0.5}),
+    dict(name='Avoid special vehicles', cond=scene_yield_emergency, safe=35, need={'2V','2P','2I'}, weight={'2V': 1.0, '2I': 1, '2P': 1}),
+    dict(name='Turn/U-turn at the intersection', cond=scene_junction_turn, safe=47, need={'2V','2I'}, weight={'2V': 1.0, '2I': 1, '2P': 0.5}),
+    dict(name='Turning with indicator on', cond=scene_turning, safe=40, need={'2V'}, weight={'2V': 1.0, '2I': 1, '2P': 1}),
+    dict(name='Overtaking on non good road conditions', cond=scene_bad_overtake, safe=33, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Overtaking on good road conditions', cond=scene_good_overtake, safe=23, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Traffic lights at intersections', cond=scene_traffic_light, safe=46, need={'2V','2I'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Vehicles honking on non good road conditions', cond=scene_bad_road_horn, safe=33, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Good road conditions with vehicles honking their horns', cond=scene_good_road_horn, safe=23, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Traffic jam', cond=scene_traffic_jam, safe=37, need={'2V','2I'}, weight={'2V': 0.7, '2I': 1, '2P': 0.5}),
+    dict(name='Normal high-speed driving', cond=scene_normal_high, safe=37, need={'2I'}, weight={'2V': 1.0, '2I': 1, '2P': 0.5}),
+    dict(name='Normal low-speed driving', cond=scene_normal_low, safe=25, need={'2I'}, weight={'2V': 1.0, '2I': 1, '2P': 0.5}),
+]
+
 
 # ------------------------------------------------------------------
 # 3. Verification method library
 # ------------------------------------------------------------------
 METHODS = [
-    dict(name='MAC address identification (Bluetooth/Wi‑Fi)',            typ='2P', safe=11.25, spd=42.5),
-    dict(name='Broadcast authentication (public‑key)',                   typ='2P', safe=28.5, spd=30),
-    dict(name='Digital certificate via BLE/Wi‑Fi',                       typ='2P', safe=28.5, spd=30),
-    dict(name='Face ID recognition',                                     typ='2P', safe=23.75, spd=35.5),
-    dict(name='Fingerprint authentication',                              typ='2P', safe=23.75, spd=47),
-    dict(name='DID authentication (blockchain‑based)',                   typ='2P', safe=43.75, spd=11.5),
-    dict(name='VIN‑based vehicle ID matching',                           typ='2V', safe=9.75, spd=42.5),
-    dict(name='Location‑based authentication (GPS)',                     typ='2V', safe=9.75, spd=27),
-    dict(name='PKI cert + real‑time vehicle status check',               typ='2V', safe=40.25, spd=17.5),
-    dict(name='APKI anonymous PKI (VANET)',                             typ='2V', safe=33.5, spd=23),
-    dict(name='Signal‑strength device verification',                     typ='2I', safe=9.75, spd=42.5),
-    dict(name='Device‑ID + location verification',                       typ='2I', safe=12.5, spd=30),
-    dict(name='LTS certificate authentication',                          typ='2I', safe=20.5, spd=30),
-    dict(name='Blockchain + digital certificate authentication (infra)', typ='2I', safe=28.5, spd=11.5),
+    dict(name='MAC address identification (Bluetooth/Wi‑Fi)',            typ='2P', safe=11.25, spd=42.5, use=70),
+    dict(name='Broadcast authentication (public‑key)',                   typ='2P', safe=28.5,  spd=30,   use=65),
+    dict(name='Digital certificate via BLE/Wi‑Fi',                       typ='2P', safe=25.5,  spd=40,   use=60),
+    dict(name='Face ID recognition',                                     typ='2P', safe=25.75, spd=50, use=45),
+    dict(name='Fingerprint authentication',                              typ='2P', safe=30.75, spd=47,   use=40),
+
+    dict(name='DID authentication (blockchain‑based)',                   typ='2V', safe=23.75, spd=11.5, use=50),
+    dict(name='VIN‑based vehicle ID matching',                           typ='2V', safe=9.75,  spd=32.5, use=80),
+    dict(name='Location‑based authentication (GPS)',                     typ='2V', safe=9.75,  spd=27,   use=85),
+    dict(name='PKI cert + real‑time vehicle status check',               typ='2V', safe=30.25, spd=17.5, use=60),
+    dict(name='APKI anonymous PKI (VANET)',                              typ='2V', safe=23.5,  spd=23,   use=70),
+
+    dict(name='Signal‑strength device verification',                     typ='2I', safe=9.75,  spd=30.5, use=90),
+    dict(name='Device‑ID + location verification',                       typ='2I', safe=12.5,  spd=25,   use=85),
+    dict(name='LTS certificate authentication',                          typ='2I', safe=20.5,  spd=23,   use=70),
+    dict(name='Blockchain + digital certificate authentication (infra)', typ='2I', safe=28.5,  spd=11.5, use=60),
 ]
 
 # ------------------------------------------------------------------
@@ -362,27 +503,63 @@ def apply_special_rules(vlm, dl, bus, req):
 def choose_methods(req):
     x = [Bool(f"m_{i}") for i in range(len(METHODS))]
     opt = Optimize()
-    # Type coverage
+#在环境光不好的时候禁用人脸识别
+    if vlm and vlm.get("low_visibility", 0) == 1:
+        for i, m in enumerate(METHODS):
+            if m["name"] == "Face ID recognition":
+                opt.add(x[i] == False)
+    # 限定每种类型必须且只能选一个方法
     for typ in req['need']:
-        opt.add(AtLeast(*[x[i] for i, m in enumerate(METHODS) if m['typ'] == typ], 1))
-    # Safety/speed thresholds
-    for i, m in enumerate(METHODS):
-        # 聚合指标而非逐方法硬约束
-        opt.add(Sum([If(xi, METHODS[i]['safe'], 0) for i, xi in enumerate(x)]) >= req['safe'])
-        opt.add(Sum([If(xi, METHODS[i]['spd'],  0) for i, xi in enumerate(x)]) >= req['spd'])
-    # Goal: Minimum number of methods, maximum speed sum
-    opt.minimize(Sum([If(xi, 1, 0) for xi in x]))
-    opt.maximize(Sum([If(xi, METHODS[i]['spd'], 0) for i, xi in enumerate(x)]))
+        indices = [i for i, m in enumerate(METHODS) if m['typ'] == typ]
+        opt.add(AtLeast(*[x[i] for i in indices], 1))
+        opt.add(AtMost(*[x[i] for i in indices], 1))
+
+    # 获取当前场景给的类型权重字典（若无，默认1.0）
+    weights = req.get("weight", {typ: 1.0 for typ in req['need']})
+
+    # 模糊目标策略
+    safe_target = req["safe"]
+    spd_target = req["spd"]
+    focus = "balanced" if abs(safe_target - spd_target) < 10 else ("safe" if safe_target > spd_target else "spd")
+
+    def composite_score(method):
+        s_diff = abs(method["safe"] - safe_target)
+        p_diff = abs(method["spd"] - spd_target)
+        use_score = method.get("use", 50)
+        typ_weight = weights.get(method["typ"], 1.0)
+
+        if focus == "safe":
+            score = 100 - s_diff + 0.3 * (method["spd"] + use_score)
+        elif focus == "spd":
+            score = 100 - p_diff + 0.3 * (method["safe"] + use_score)
+        else:
+            score = 100 - (s_diff + p_diff) / 2 + 0.1 * use_score
+
+        return score * typ_weight  # 加权！
+
+    # 构造目标函数
+    total_score = Sum([
+        If(x[i], RealVal(composite_score(m)), RealVal(0))
+        for i, m in enumerate(METHODS)
+        if m['typ'] in req['need']
+    ])
+    opt.maximize(total_score)
+
     if opt.check() != sat:
-        raise RuntimeError("No verification methods meet current threshold combination, please relax conditions or expand method library.")
+        raise RuntimeError("No verification methods meet current constraints.")
+    
     model = opt.model()
-    return [METHODS[i] for i, xi in enumerate(x) if model.eval(xi)]
+    return [METHODS[i] for i, xi in enumerate(x) if is_true(model.eval(xi, model_completion=True))]
+
+
 
 # ------------------------------------------------------------------
 # 6. Main evaluation process
 # ------------------------------------------------------------------
 def evaluate(vlm, dl, bus):
     rule = find_scene(vlm, dl, bus)
+    rule['spd'] = compute_spd_from_json(vlm, dl, bus)
+    rule['safe'] = compute_safe_from_scene(rule)
     apply_special_rules(vlm, dl, bus, rule)
     methods = choose_methods(rule)
     return {
@@ -466,6 +643,8 @@ if __name__ == '__main__':
                     
                     pprint(result, width=120, compact=True)
                     output_result(result)
+                    print(f"Scene spd (demand): {result['speed_min']}")
+                    print(f"Scene safe (demand): {result['safety_min']}")
                 except Exception as e:
                     print(f"Evaluation error: {e}", file=sys.stderr)
 

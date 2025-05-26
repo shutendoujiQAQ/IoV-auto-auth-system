@@ -262,6 +262,7 @@ class XboxController(object):
         self.update_busdata_timer = threading.Timer(0.5, self.update_busdata)
         self.update_busdata_timer.daemon = True
         self.update_busdata_timer.start()
+        self.acc_history = []
         # 不再需要 heavy_brake 录制相关的变量
         # self._heavy_brake_start = None
         # self._recording = False
@@ -283,12 +284,27 @@ class XboxController(object):
                 self.world.player.get_velocity().z**2
             ) * 3.6
             angle = steer_axis * 60
+            acc_vector = self.world.player.get_acceleration()
+            forward_vector = self.world.player.get_transform().get_forward_vector()
+            acc_forward = (
+                acc_vector.x * forward_vector.x +
+                acc_vector.y * forward_vector.y +
+                acc_vector.z * forward_vector.z
+            )
+            self.acc_history.append((time.time(), acc_forward))
+            # 保留最近 2 秒内的记录
+            self.acc_history = [
+                (t, a) for t, a in self.acc_history if time.time() - t <= 2.0
+            ]
+            # 记录最大值（用于传入 JSON）
+            acc_max = max([abs(a) for _, a in self.acc_history], default=0)
             busdata = {
                 "throttle": throttle,
                 "brake": brake,
                 "speed": speed,
                 "angle": angle,
-                "overtake_light": self._overtake_light
+                "overtake_light": self._overtake_light,
+                "acceleration": acc_max
             }
             try:
                 with open("BUSDATA.json", "w", encoding="utf-8") as f:
@@ -705,7 +721,15 @@ class CollisionSensor(object):
         self.history.append((event.frame, intensity))
         if len(self.history) > 4000:
             self.history.pop(0)
-
+        if intensity > 1000.0:
+            try:
+                from infer_random_audio import FOLD_MAP
+                if audio_queue is not None:
+                    crash_fold = FOLD_MAP.get("up", "crash")
+                    audio_queue.put(crash_fold)
+                    self.hud.notification("Collision-triggered audio infer: crash", seconds=1.5)
+            except Exception as e:
+                print("[CollisionSensor] Failed to trigger audio on collision:", e)
 # ============================================================================== 
 # -- LaneInvasionSensor --------------------------------------------------------
 # ==============================================================================
