@@ -1,4 +1,4 @@
-import requests
+from ollama import Client 
 import base64
 import json
 import re
@@ -6,8 +6,8 @@ from pathlib import Path
 import time
 from threading import Lock
 
-# 初始化服务器地址和热启动状态
-API_URL = 'https://6nq94pfmo4b-vlm.gear-c1.openbayes.net/api/generate'  # 或 'http://localhost:11434/api/generate'
+# 初始化客户端和热启动状态
+client = Client(host='https://6nq94pfmo4b-vlm.gear-c1.openbayes.net/')  # 或 'http://localhost:11434'
 model_lock = Lock()
 model_warm_started = False
 
@@ -17,18 +17,17 @@ def warm_start_model():
     with model_lock:
         if not model_warm_started:
             print("正在预热模型...")
-            payload = {
-                'model': 'gemma3:27b',
-                'prompt': "ping",
-                'options': {
+            client.generate(
+                model='gemma3:27b',
+                prompt="ping",
+                options={
                     'num_ctx': 4096,
                     'num_predict': 1,
                     'temperature': 0,
                     'top_k': 20,
                     'format': 'json'
                 }
-            }
-            response = requests.post(API_URL, json=payload)
+            )
             model_warm_started = True
             print("模型预热完成")
 
@@ -48,20 +47,18 @@ def process_image_analysis(image_path):
     try:
         image_b64 = encode_image_base64(image_path)
         with model_lock:
-            payload = {
-                'model': 'gemma3:27b',
-                'prompt': prompt,
-                'images': [image_b64],
-                'options': {
+            response = client.generate(
+                model='gemma3:27b',
+                prompt=prompt,
+                images=[image_b64],
+                options={
                     'num_ctx': 4096,
                     'num_predict': 64,
                     'temperature': 0,
                     'top_k': 20,
                     'format': 'json'
                 }
-            }
-            response = requests.post(API_URL, json=payload)
-            response_data = response.json()
+            )
         
         def validate_json(data):
             required = {"scene_class", "special_case", "low_visibility"}
@@ -76,7 +73,7 @@ def process_image_analysis(image_path):
             return True
 
         # 从模型响应中提取纯 JSON
-        match = re.search(r'\{.*\}', response_data.get('response', ''))
+        match = re.search(r'\{.*\}', response.get('response', ''))
         if match:
             data = json.loads(match.group())
             if validate_json(data):
