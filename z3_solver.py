@@ -263,30 +263,30 @@ def scene_normal_low(vlm, dl, bus):
 
 
 # ------------------------------------------------------------------
-# 2. Special rules (speed +20 / safety −10; low visibility speed +20)
+# 2. Special rules (speed +20 / securityty −10; low visibility speed +20)
 # ------------------------------------------------------------------
 def rule_pedestrian_voice(vlm, dl, bus, req):
     if dl.get('sound_class') == 4 and vlm.get('special_case') != 1:
-        req['spd']  += 20
-        req['safe'] = max(req['safe'] - 10, 0)
+        req['speed']  += 20
+        req['security'] = max(req['security'] - 10, 0)
 
 def rule_low_visibility(vlm, dl, bus, req):
     if vlm.get('low_visibility') == 1:
-        req['spd'] += 20
+        req['speed'] += 20
 
-SPECIAL_RULES = []# 目前special rules这点被直接放到了spd计算中，所以无需额外设定special rules了。这里暂且做保留
+SPECIAL_RULES = []# 目前special rules这点被直接放到了speed计算中，所以无需额外设定special rules了。这里暂且做保留
 
 
 # 计算场景需要的速度和安全性分数：
-def compute_spd_from_json(vlm, dl, bus):
-    SCENE_CLASS_SPD_WEIGHT = {
+def compute_speed_from_json(vlm, dl, bus):
+    SCENE_CLASS_speed_WEIGHT = {
     1: 0,   # Wide city road
     2: 5,   # Narrow road
     3: 10,  # Intersection
     4: 15,  # Highway
     5: 20   # Mountain road
     } 
-    SPECIAL_CASE_SPD_WEIGHT = {
+    SPECIAL_CASE_speed_WEIGHT = {
         0: 0,   # None
         1: 15,  # Pedestrian block
         2: 20,  # Accident
@@ -294,40 +294,40 @@ def compute_spd_from_json(vlm, dl, bus):
         4: 10   # Obstacle
     }
 
-    spd = 0
+    speed = 0
     # BUSDATA.json → 车辆动态
-    spd += bus.get("speed", 0) * 0.4
-    spd += abs(bus.get("acceleration", 0)) * 2
-    spd += abs(bus.get("brake", 0)) * 1
+    speed += bus.get("speed", 0) * 0.4
+    speed += abs(bus.get("acceleration", 0)) * 2
+    speed += abs(bus.get("brake", 0)) * 1
     # VLM.json → 可视场景因素
-    scene_spd = SCENE_CLASS_SPD_WEIGHT.get(vlm.get("scene_class", 0), 0)
-    spd += scene_spd
-    special_spd = SPECIAL_CASE_SPD_WEIGHT.get(vlm.get("special_case", 0), 0)
-    spd += special_spd
+    scene_speed = SCENE_CLASS_speed_WEIGHT.get(vlm.get("scene_class", 0), 0)
+    speed += scene_speed
+    special_speed = SPECIAL_CASE_speed_WEIGHT.get(vlm.get("special_case", 0), 0)
+    speed += special_speed
     # 特殊规则
     if abs(bus.get("brake", 0)) > 0.7:
-        spd += ((abs(bus.get("brake", 0)) - 0.7) * 5) ** 2 * 10  # 可调曲线爆发
+        speed += ((abs(bus.get("brake", 0)) - 0.7) * 5) ** 2 * 10  # 可调曲线爆发
 
 
     if vlm.get("low_visibility", 0):
-        spd += 10
+        speed += 10
     # DL.json → 声音事件（如碰撞、尖叫）
     if dl.get("sound_class", 0) in {1, 4}:
-        spd += 5
+        speed += 5
 
-    return max(0, min(round(spd, 1), 100))  # 限制在 0~100 范围
+    return max(0, min(round(speed, 1), 100))  # 限制在 0~100 范围
 # 计算场景需要的安全分数：
-def compute_safe_from_scene(scene_dict, attack_profile=None):
+def compute_security_from_scene(scene_dict, attack_profile=None):
     """
     根据场景中所需的认证类型（need）和对应权重（weight），结合各类型面临的攻击风险，
-    估算当前场景所需的安全性分数（safe），对标 Z3 中的 Security = min(auth, conf, integ) 结构。
+    估算当前场景所需的安全性分数（security），对标 Z3 中的 Security = min(auth, conf, integ) 结构。
     
     参数说明：
     - scene_dict：dict，包含 'need' 和 'weight' 字段，来自 SCENES 中的定义
     - attack_profile：dict，定义每类认证方式类型面临的攻击风险值（默认固定）
 
     返回：
-    - safe：float，0~100 的安全性需求得分
+    - security：float，0~100 的安全性需求得分
     """
     
     # 各认证类型对安全目标的平均贡献能力（模拟 Z3 中的 Impact 值）
@@ -378,62 +378,81 @@ def compute_safe_from_scene(scene_dict, attack_profile=None):
     avg_integ = sum_integ / total_weight
 
     # 使用 Z3 中 min(Authenticity, Confidentiality, Integrity) 方式取最终得分
-    final_safe = min(avg_auth, avg_conf, avg_integ)
-    raw_safe = final_safe
-    scaled_safe = 50 + (raw_safe - 0.6) * 150
-    return round(max(50, min(80, scaled_safe)), 1)
-    #return round(final_safe * 100, 1)
+    final_security = min(avg_auth, avg_conf, avg_integ)
+    raw_security = final_security
+    scaled_security = 50 + (raw_security - 0.6) * 150
+    return round(max(50, min(80, scaled_security)), 1)
+    #return round(final_security * 100, 1)
 
 
 
 
-#当前主要改动了scene部分，原先设定每个场景的spd和safe现在都根据驾驶数据，周围环境动态计算
+#当前主要改动了scene部分，原先设定每个场景的speed和security现在都根据驾驶数据，周围环境动态计算
 
 SCENES = [
-    dict(name='Encountering a car accident on one\'s own', cond=scene_self_accident, safe=91, need={'2P','2I'}, weight={'2V': 1.0, '2I': 0.6, '2P': 0.5}),
-    dict(name='Nearby accident ', cond=scene_nearby_accident, safe=80, need={'2P','2I'}, weight={'2V': 1.0, '2I': 0.6, '2P': 0.5}),
-    dict(name='Emergency brake', cond=scene_hard_brake, safe=60, need={'2V'}, weight={'2V': 1.0}),
-    dict(name='Emergency avoidance', cond=scene_hard_evasion, safe=60, need={'2V','2I'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
-    dict(name='Mountain road in distress', cond=scene_mountain_hazard, safe=60, need={'2V','2P','2I'}, weight={'2V': 1.0, '2I': 0.8, '2P': 0.7}),
-    dict(name='Pedestrians blocking ahead', cond=scene_pedestrian_block, safe=45, need={'2P'}, weight={'2P': 1}),
-    dict(name='A car accident occurred ahead', cond=scene_accident_ahead, safe=81, need={'2V','2I'}, weight={'2V': 0.7, '2I': 0.8, '2P': 0.5}),
-    dict(name='Obstacles blocking the road ahead in unfavorable conditions', cond=scene_bad_obstacle_block, safe=53, need={'2V','2I'}, weight={'2V': 1.0, '2I': 0.9}),
-    dict(name='Good obstacle blocking ahead', cond=scene_good_obstacle_block, safe=28, need={'2V','2I'}, weight={'2V': 0.8, '2I':1, '2P': 0.5}),
-    dict(name='Avoid special vehicles', cond=scene_yield_emergency, safe=35, need={'2V','2P','2I'}, weight={'2V': 1.0, '2I': 1, '2P': 1}),
-    dict(name='Turn/U-turn at the intersection', cond=scene_junction_turn, safe=47, need={'2V','2I'}, weight={'2V': 1.0, '2I': 1, '2P': 0.5}),
-    dict(name='Turning with indicator on', cond=scene_turning, safe=40, need={'2V'}, weight={'2V': 1.0, '2I': 1, '2P': 1}),
-    dict(name='Overtaking on non good road conditions', cond=scene_bad_overtake, safe=33, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
-    dict(name='Overtaking on good road conditions', cond=scene_good_overtake, safe=23, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
-    dict(name='Traffic lights at intersections', cond=scene_traffic_light, safe=46, need={'2V','2I'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
-    dict(name='Vehicles honking on non good road conditions', cond=scene_bad_road_horn, safe=33, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
-    dict(name='Good road conditions with vehicles honking their horns', cond=scene_good_road_horn, safe=23, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
-    dict(name='Traffic jam', cond=scene_traffic_jam, safe=37, need={'2V','2I'}, weight={'2V': 0.7, '2I': 1, '2P': 0.5}),
-    dict(name='Normal high-speed driving', cond=scene_normal_high, safe=37, need={'2I'}, weight={'2V': 1.0, '2I': 1, '2P': 0.5}),
-    dict(name='Normal low-speed driving', cond=scene_normal_low, safe=25, need={'2I'}, weight={'2V': 1.0, '2I': 1, '2P': 0.5}),
+    dict(name='Encountering a car accident on one\'s own', cond=scene_self_accident, need={'2P','2I'}, weight={'2V': 1.0, '2I': 0.6, '2P': 0.5}),
+    dict(name='Nearby accident ', cond=scene_nearby_accident, need={'2P','2I'}, weight={'2V': 1.0, '2I': 0.6, '2P': 0.5}),
+    dict(name='Emergency brake', cond=scene_hard_brake, need={'2V'}, weight={'2V': 1.0}),
+    dict(name='Emergency avoidance', cond=scene_hard_evasion, need={'2V','2I'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Mountain road in distress', cond=scene_mountain_hazard, need={'2V','2P','2I'}, weight={'2V': 1.0, '2I': 0.8, '2P': 0.7}),
+    dict(name='Pedestrians blocking ahead', cond=scene_pedestrian_block, need={'2P'}, weight={'2P': 1}),
+    dict(name='A car accident occurred ahead', cond=scene_accident_ahead, need={'2V','2I'}, weight={'2V': 0.7, '2I': 0.8, '2P': 0.5}),
+    dict(name='Obstacles blocking the road ahead in unfavorable conditions', cond=scene_bad_obstacle_block, need={'2V','2I'}, weight={'2V': 1.0, '2I': 0.9}),
+    dict(name='Good obstacle blocking ahead', cond=scene_good_obstacle_block, need={'2V','2I'}, weight={'2V': 0.8, '2I': 1, '2P': 0.5}),
+    dict(name='Avoid special vehicles', cond=scene_yield_emergency, need={'2V','2P','2I'}, weight={'2V': 1.0, '2I': 1, '2P': 1}),
+    dict(name='Turn/U-turn at the intersection', cond=scene_junction_turn, need={'2V','2I'}, weight={'2V': 1.0, '2I': 1, '2P': 0.5}),
+    dict(name='Turning with indicator on', cond=scene_turning, need={'2V'}, weight={'2V': 1.0, '2I': 1, '2P': 1}),
+    dict(name='Overtaking on non good road conditions', cond=scene_bad_overtake, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Overtaking on good road conditions', cond=scene_good_overtake, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Traffic lights at intersections', cond=scene_traffic_light, need={'2V','2I'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Vehicles honking on non good road conditions', cond=scene_bad_road_horn, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Good road conditions with vehicles honking their horns', cond=scene_good_road_horn, need={'2V'}, weight={'2V': 1.0, '2I': 0.7, '2P': 0.5}),
+    dict(name='Traffic jam', cond=scene_traffic_jam, need={'2V','2I'}, weight={'2V': 0.7, '2I': 1, '2P': 0.5}),
+    dict(name='Normal high-speed driving', cond=scene_normal_high, need={'2I'}, weight={'2V': 1.0, '2I': 1, '2P': 0.5}),
+    dict(name='Normal low-speed driving', cond=scene_normal_low, need={'2I'}, weight={'2V': 1.0, '2I': 1, '2P': 0.5}),
 ]
-
 
 # ------------------------------------------------------------------
 # 3. Verification method library
 # ------------------------------------------------------------------
+# METHODS = [
+#     dict(name='MAC address identification (Bluetooth/Wi‑Fi)',            typ='2P', security=11.25, speed=42.5, use=70),
+#     dict(name='Broadcast authentication (public‑key)',                   typ='2P', security=28.5,  speed=30,   use=65),
+#     dict(name='Digital certificate via BLE/Wi‑Fi',                       typ='2P', security=25.5,  speed=40,   use=60),
+#     dict(name='Face ID recognition',                                     typ='2P', security=25.75, speed=50, use=45),
+#     dict(name='Fingerprint authentication',                              typ='2P', security=30.75, speed=47,   use=40),
+
+#     dict(name='DID authentication (blockchain‑based)',                   typ='2V', security=23.75, speed=11.5, use=50),
+#     dict(name='VIN‑based vehicle ID matching',                           typ='2V', security=9.75,  speed=32.5, use=80),
+#     dict(name='Location‑based authentication (GPS)',                     typ='2V', security=9.75,  speed=27,   use=85),
+#     dict(name='PKI cert + real‑time vehicle status check',               typ='2V', security=30.25, speed=17.5, use=60),
+#     dict(name='APKI anonymous PKI (VANET)',                              typ='2V', security=23.5,  speed=23,   use=70),
+
+#     dict(name='Signal‑strength device verification',                     typ='2I', security=9.75,  speed=30.5, use=90),
+#     dict(name='Device‑ID + location verification',                       typ='2I', security=12.5,  speed=25,   use=85),
+#     dict(name='LTS certificate authentication',                          typ='2I', security=20.5,  speed=23,   use=70),
+#     dict(name='Blockchain + digital certificate authentication (infra)', typ='2I', security=28.5,  speed=11.5, use=60),
+# ]
+
 METHODS = [
-    dict(name='MAC address identification (Bluetooth/Wi‑Fi)',            typ='2P', safe=11.25, spd=42.5, use=70),
-    dict(name='Broadcast authentication (public‑key)',                   typ='2P', safe=28.5,  spd=30,   use=65),
-    dict(name='Digital certificate via BLE/Wi‑Fi',                       typ='2P', safe=25.5,  spd=40,   use=60),
-    dict(name='Face ID recognition',                                     typ='2P', safe=25.75, spd=50, use=45),
-    dict(name='Fingerprint authentication',                              typ='2P', safe=30.75, spd=47,   use=40),
+    dict(name='MAC address identification (Bluetooth/Wi‑Fi)',            typ='2P', security=11.25, speed=42.5),
+    dict(name='Broadcast authentication (public‑key)',                   typ='2P', security=28.5,  speed=30),
+    dict(name='Digital certificate via BLE/Wi‑Fi',                       typ='2P', security=25.5,  speed=40),
+    dict(name='Face ID recognition',                                     typ='2P', security=25.75, speed=50),
+    dict(name='Fingerprint authentication',                              typ='2P', security=30.75, speed=47),
 
-    dict(name='DID authentication (blockchain‑based)',                   typ='2V', safe=23.75, spd=11.5, use=50),
-    dict(name='VIN‑based vehicle ID matching',                           typ='2V', safe=9.75,  spd=32.5, use=80),
-    dict(name='Location‑based authentication (GPS)',                     typ='2V', safe=9.75,  spd=27,   use=85),
-    dict(name='PKI cert + real‑time vehicle status check',               typ='2V', safe=30.25, spd=17.5, use=60),
-    dict(name='APKI anonymous PKI (VANET)',                              typ='2V', safe=23.5,  spd=23,   use=70),
+    dict(name='DID authentication (blockchain‑based)',                   typ='2V', security=23.75, speed=11.5),
+    dict(name='VIN‑based vehicle ID matching',                           typ='2V', security=9.75,  speed=32.5),
+    dict(name='Location‑based authentication (GPS)',                     typ='2V', security=9.75,  speed=27),
+    dict(name='PKI cert + real‑time vehicle status check',               typ='2V', security=30.25, speed=17.5),
+    dict(name='APKI anonymous PKI (VANET)',                              typ='2V', security=23.5,  speed=23),
 
-    dict(name='Signal‑strength device verification',                     typ='2I', safe=9.75,  spd=30.5, use=90),
-    dict(name='Device‑ID + location verification',                       typ='2I', safe=12.5,  spd=25,   use=85),
-    dict(name='LTS certificate authentication',                          typ='2I', safe=20.5,  spd=23,   use=70),
-    dict(name='Blockchain + digital certificate authentication (infra)', typ='2I', safe=28.5,  spd=11.5, use=60),
+    dict(name='Signal‑strength device verification',                     typ='2I', security=9.75,  speed=30.5),
+    dict(name='Device‑ID + location verification',                       typ='2I', security=12.5,  speed=25),
+    dict(name='LTS certificate authentication',                          typ='2I', security=20.5,  speed=23),
+    dict(name='Blockchain + digital certificate authentication (infra)', typ='2I', security=28.5,  speed=11.5),
 ]
+
 
 # ------------------------------------------------------------------
 # 4. Scene matching & special adjustments
@@ -500,44 +519,97 @@ def apply_special_rules(vlm, dl, bus, req):
 # ------------------------------------------------------------------
 # 5. Z3 combination search
 # ------------------------------------------------------------------
+#这里注释掉的是使用use参与评分的，实际可能不太需要use，所有我删了
+# def choose_methods(req):
+#     x = [Bool(f"m_{i}") for i in range(len(METHODS))]
+#     opt = Optimize()
+# #在环境光不好的时候禁用人脸识别
+#     if vlm and vlm.get("low_visibility", 0) == 1:
+#         for i, m in enumerate(METHODS):
+#             if m["name"] == "Face ID recognition":
+#                 opt.add(x[i] == False)
+#     # 限定每种类型必须且只能选一个方法
+#     for typ in req['need']:
+#         indices = [i for i, m in enumerate(METHODS) if m['typ'] == typ]
+#         opt.add(AtLeast(*[x[i] for i in indices], 1))
+#         opt.add(AtMost(*[x[i] for i in indices], 1))
+
+#     # 获取当前场景给的类型权重字典（若无，默认1.0）
+#     weights = req.get("weight", {typ: 1.0 for typ in req['need']})
+
+#     # 模糊目标策略
+#     security_target = req["security"]
+#     speed_target = req["speed"]
+#     focus = "balanced" if abs(security_target - speed_target) < 10 else ("security" if security_target > speed_target else "speed")
+
+#     def composite_score(method):
+#         s_diff = abs(method["security"] - security_target)
+#         p_diff = abs(method["speed"] - speed_target)
+#         use_score = method.get("use", 50)
+#         typ_weight = weights.get(method["typ"], 1.0)
+
+#         if focus == "security":
+#             score = 100 - s_diff + 0.3 * (method["speed"] + use_score)
+#         elif focus == "speed":
+#             score = 100 - p_diff + 0.3 * (method["security"] + use_score)
+#         else:
+#             score = 100 - (s_diff + p_diff) / 2 + 0.1 * use_score
+
+#         return score * typ_weight  # 加权！
+
+#     # 构造目标函数
+#     total_score = Sum([
+#         If(x[i], RealVal(composite_score(m)), RealVal(0))
+#         for i, m in enumerate(METHODS)
+#         if m['typ'] in req['need']
+#     ])
+#     opt.maximize(total_score)
+
+#     if opt.check() != sat:
+#         raise RuntimeError("No verification methods meet current constraints.")
+    
+#     model = opt.model()
+#     return [METHODS[i] for i, xi in enumerate(x) if is_true(model.eval(xi, model_completion=True))]
+
+#这个是不使用use的版本
 def choose_methods(req):
     x = [Bool(f"m_{i}") for i in range(len(METHODS))]
     opt = Optimize()
-#在环境光不好的时候禁用人脸识别
+
+    # 禁用某些方法：例如在低能见度下禁用人脸识别
     if vlm and vlm.get("low_visibility", 0) == 1:
         for i, m in enumerate(METHODS):
             if m["name"] == "Face ID recognition":
                 opt.add(x[i] == False)
-    # 限定每种类型必须且只能选一个方法
+
+    # 每种类型必须且只能选一个方法
     for typ in req['need']:
         indices = [i for i, m in enumerate(METHODS) if m['typ'] == typ]
         opt.add(AtLeast(*[x[i] for i in indices], 1))
         opt.add(AtMost(*[x[i] for i in indices], 1))
 
-    # 获取当前场景给的类型权重字典（若无，默认1.0）
+    # 获取类型权重（默认权重为 1.0）
     weights = req.get("weight", {typ: 1.0 for typ in req['need']})
 
-    # 模糊目标策略
-    safe_target = req["safe"]
-    spd_target = req["spd"]
-    focus = "balanced" if abs(safe_target - spd_target) < 10 else ("safe" if safe_target > spd_target else "spd")
+    security_target = req["security"]
+    speed_target = req["speed"]
+    focus = "balanced" if abs(security_target - speed_target) < 10 else ("security" if security_target > speed_target else "speed")
 
     def composite_score(method):
-        s_diff = abs(method["safe"] - safe_target)
-        p_diff = abs(method["spd"] - spd_target)
-        use_score = method.get("use", 50)
+        s_diff = abs(method["security"] - security_target)
+        p_diff = abs(method["speed"] - speed_target)
         typ_weight = weights.get(method["typ"], 1.0)
 
-        if focus == "safe":
-            score = 100 - s_diff + 0.3 * (method["spd"] + use_score)
-        elif focus == "spd":
-            score = 100 - p_diff + 0.3 * (method["safe"] + use_score)
+        if focus == "security":
+            score = 100 - s_diff + 0.3 * method["speed"]
+        elif focus == "speed":
+            score = 100 - p_diff + 0.3 * method["security"]
         else:
-            score = 100 - (s_diff + p_diff) / 2 + 0.1 * use_score
+            score = 100 - (s_diff + p_diff) / 2  # 平衡模式下没有 use 加权
 
-        return score * typ_weight  # 加权！
+        return score * typ_weight
 
-    # 构造目标函数
+    # 构造目标函数（不再引用 use）
     total_score = Sum([
         If(x[i], RealVal(composite_score(m)), RealVal(0))
         for i, m in enumerate(METHODS)
@@ -547,10 +619,9 @@ def choose_methods(req):
 
     if opt.check() != sat:
         raise RuntimeError("No verification methods meet current constraints.")
-    
+
     model = opt.model()
     return [METHODS[i] for i, xi in enumerate(x) if is_true(model.eval(xi, model_completion=True))]
-
 
 
 # ------------------------------------------------------------------
@@ -558,16 +629,16 @@ def choose_methods(req):
 # ------------------------------------------------------------------
 def evaluate(vlm, dl, bus):
     rule = find_scene(vlm, dl, bus)
-    rule['spd'] = compute_spd_from_json(vlm, dl, bus)
-    rule['safe'] = compute_safe_from_scene(rule)
+    rule['speed'] = compute_speed_from_json(vlm, dl, bus)
+    rule['security'] = compute_security_from_scene(rule)
     apply_special_rules(vlm, dl, bus, rule)
     methods = choose_methods(rule)
     return {
         'scene':            rule['name'],
         'confidence':       rule['confidence'],  # 添加置信度输出
         'need_types':       list(rule['need']),
-        'speed_min':        rule['spd'],
-        'safety_min':       rule['safe'],
+        'speed_min':        rule['speed'],
+        'securityty_min':       rule['security'],
         'selected_methods': methods
     }
 
@@ -593,7 +664,7 @@ if __name__ == '__main__':
             # Convert selected_methods to JSON serializable format
             res_copy = res.copy()
             res_copy['selected_methods'] = [
-                {'name': m['name'], 'typ': m['typ'], 'safe': m['safe'], 'spd': m['spd']}
+                {'name': m['name'], 'typ': m['typ'], 'security': m['security'], 'speed': m['speed']}
                 for m in res['selected_methods']
             ]
             # 确保置信度被格式化为两位小数
@@ -643,8 +714,8 @@ if __name__ == '__main__':
                     
                     pprint(result, width=120, compact=True)
                     output_result(result)
-                    print(f"Scene spd (demand): {result['speed_min']}")
-                    print(f"Scene safe (demand): {result['safety_min']}")
+                    print(f"Scene speed (demand): {result['speed_min']}")
+                    print(f"Scene security (demand): {result['securityty_min']}")
                 except Exception as e:
                     print(f"Evaluation error: {e}", file=sys.stderr)
 

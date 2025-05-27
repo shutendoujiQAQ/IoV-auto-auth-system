@@ -518,13 +518,26 @@ class HUD(object):
             text_surf = self._font_mono.render(line, True, (255,255,255))
             display.blit(text_surf, (x, y))
             y += 20
-        # 4) 渲染速度、油门、刹车、方向盘角度
+        # 4) 渲染速度、油门、刹车、方向盘角度和加速度
+
+        # 读取 BUSDATA.json 中的加速度字段
+        try:
+            with open("BUSDATA.json", "r", encoding="utf-8") as f:
+                busdata = json.load(f)
+            acc_val = busdata.get("acceleration", None)
+        except Exception as e:
+            acc_val = None
         info = [
             f"Speed: {speed:.1f} km/h",
             f"Throttle: {throttle:.2f}",
             f"Brake:    {brake:.2f}",
-            f"Steer:    {angle:.1f}°"
+            f"Steer:    {angle:.1f}°",
+            f"Accel:    {acc_val:.2f} m/s²" if acc_val is not None else "Accel:    N/A"
         ]
+
+    
+
+
         for line in info:
             text_surf = self._font_mono.render(line, True, (255,255,255))
             display.blit(text_surf, (x, y))
@@ -1024,7 +1037,7 @@ def game_loop(args):
            #Town07	小型郊区住宅区
            # Town10HD	高精度城市地图
            # Town11	山路场景
-        client.load_world('Town10HD')
+        client.load_world('Town04')
         sim_world = client.get_world()
 
         display = pygame.display.set_mode((args.width,args.height), pygame.HWSURFACE|pygame.DOUBLEBUF)
